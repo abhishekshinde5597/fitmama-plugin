@@ -1,0 +1,386 @@
+<?php
+
+/**
+ * Plugin Name: Elementor Addon
+ * Description: Products addon  
+ * Version:     1.0.0
+ * Author:      Abhishek Shinde
+ * Author URI:  https://www.trooinbound.com/
+ * Text Domain: elementor-addon
+ */
+
+function register_custom_slider_widget($widgets_manager)
+{
+
+    require_once(__DIR__ . '/widgets/Custom_Category_Widget.php');
+    
+
+    $widgets_manager->register(new \Custom_Category_Widget());
+}
+add_action('elementor/widgets/register', 'register_custom_slider_widget');
+
+
+function add_featured_meta_box()
+{
+    add_meta_box(
+        'featured-meta-box',
+        'Featured Post',
+        'featured_meta_box_callback',
+        'post',
+        'side',
+        'default'
+    );
+}
+add_action('add_meta_boxes', 'add_featured_meta_box');
+
+function featured_meta_box_callback($post)
+{
+    $featured = get_post_meta($post->ID, '_featured_post', true);
+?>
+    <label for="featured-post">
+        <input type="checkbox" name="featured-post" id="featured-post" <?php checked($featured, 'on'); ?> />
+        Mark this post as featured
+    </label>
+<?php
+}
+
+function save_featured_post_meta($post_id)
+{
+    if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE)
+        return $post_id;
+
+    if (isset($_POST['featured-post'])) {
+        update_post_meta($post_id, '_featured_post', 'on');
+    } else {
+        delete_post_meta($post_id, '_featured_post');
+    }
+}
+add_action('save_post', 'save_featured_post_meta');
+
+// Add custom column to post listing
+function add_featured_column($columns)
+{
+    $columns['featured_post'] = 'Featured Post';
+    return $columns;
+}
+add_filter('manage_posts_columns', 'add_featured_column');
+
+// Populate the custom column with the editable featured post status
+function display_featured_column($column, $post_id)
+{
+    if ($column === 'featured_post') {
+        $featured = get_post_meta($post_id, '_featured_post', true);
+        $star_icon = ($featured === 'on') ? 'fas fa-star' : 'far fa-star';
+
+        echo '<span class="featured-star ' . esc_attr($star_icon) . '" data-post-id="' . esc_attr($post_id) . '"></span>';
+    }
+}
+add_action('manage_posts_custom_column', 'display_featured_column', 10, 2);
+
+// Add JavaScript to handle the star icon click event and update post meta
+function featured_column_js()
+{
+?>
+    <script type="text/javascript">
+        jQuery(document).ready(function($) {
+            jQuery('.featured-star').on('click', function() {
+                var post_id = jQuery(this).data('post-id');
+                var featured = jQuery(this).hasClass('fas fa-star') ? 'off' : 'on';
+
+				jQuery.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'update_featured_status',
+                        post_id: post_id,
+                        featured: featured,
+                    },
+                    success: function(response) {
+                        location.reload();
+                    }
+                });
+            });
+        });
+
+		
+    </script>
+<?php
+}
+add_action('admin_footer', 'featured_column_js');
+
+// Ajax handler to update post meta when star icon is clicked
+function update_featured_status()
+{
+    $post_id = $_POST['post_id'];
+    $featured = $_POST['featured'];
+
+    // For Multiple Featured Post  
+   
+            if ($featured === 'on') {
+                update_post_meta($post_id, '_featured_post', 'on');
+            } else {
+                delete_post_meta($post_id, '_featured_post');
+            }
+
+    die();
+}
+add_action('wp_ajax_update_featured_status', 'update_featured_status');
+
+function enqueue_font_awesome()
+{
+    wp_enqueue_style('font-awesome', 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css');
+}
+add_action('admin_enqueue_scripts', 'enqueue_font_awesome');
+
+
+function ajaxaddtocart()
+{
+?>
+   <script type="text/javascript">
+    jQuery(document).ready(function($) {
+        jQuery(document).on('click', '.fit-add-to-cart-ctm', function(e) {
+                e.preventDefault();
+                //console.log("test");
+                // var product_id = jQuery(this).data('product-id');
+                //var product_id = jQuery(this).data('product-id');
+                var variation_id =jQuery(this).prev().find('select.variation-dropdown').val();
+                var p_id =jQuery(this).prev().find('select.variation-dropdown').attr("id");
+                var s_id = jQuery(this).data('productid');
+                // console.log(variation_id);
+                // console.log(s_id);
+                //    var variation_id = selectedOption.val();
+                
+                // var product_id =jQuery(this).attr('data');
+                
+                    jQuery.ajax({
+                            url: '/wp-admin/admin-ajax.php',
+                            type: 'POST',
+                            data: {
+                                action: 'load_variation_data',
+                                variation_id: variation_id,
+                                p_id: p_id,
+                                s_id :s_id,
+                            
+                            },
+                            success: function(response) {
+                            window.location.href = '/cart';
+                            
+                            }
+                        });
+                });
+
+              
+            jQuery(document).on('change', '.variation-dropdown', function() {
+                    var variation_id = jQuery(this).val();
+                    var data = {
+                        'action': 'get_variation_price',
+                        'variation_id': variation_id
+                    };
+                    var $priceContainer = jQuery(this).closest('.fit-product-main').find('.price');
+                    jQuery.ajax({
+                        url: '/wp-admin/admin-ajax.php',
+                        data: data,
+                        type: 'POST',
+                        success: function(response) {
+                            $priceContainer.html(response);
+                        }
+                    });
+               });
+
+            jQuery('.category-button').click(function(e) {
+                e.preventDefault();
+            var category =jQuery(this).data('category');
+            jQuery('.category-button').removeClass('active');
+             jQuery(this).addClass('active');
+           
+            var data = {
+                    'action': 'filter_products',
+                    'category': category,
+    
+                };
+                jQuery.ajax({
+                    url: '/wp-admin/admin-ajax.php',
+                    data: data,
+                    type: 'POST',
+                    success: function(response) {
+                        jQuery('.fit-products-ctm ul').html(response);
+                    }
+                });
+
+    });   });
+    </script>
+<?php
+}
+add_action('wp_footer', 'ajaxaddtocart');
+
+function load_variation_data() {
+    if (isset($_POST['variation_id']) && isset($_POST['p_id'])) {
+        WC()->cart->add_to_cart($_POST['p_id'], 1, $_POST['variation_id']);
+        $cart_url = wc_get_cart_url();
+        echo esc_url($cart_url);
+    }else{
+		
+		WC()->cart->add_to_cart($_POST['s_id'], 1);
+	}
+    exit();
+}
+add_action('wp_ajax_load_variation_data', 'load_variation_data');
+add_action('wp_ajax_nopriv_load_variation_data', 'load_variation_data');
+
+add_action('wp_ajax_get_variation_price', 'get_variation_price');
+add_action('wp_ajax_nopriv_get_variation_price', 'get_variation_price');
+
+function get_variation_price() {
+    if (isset($_POST['variation_id'])) {
+        $variation_id = intval($_POST['variation_id']);
+        $variation = new WC_Product_Variation($variation_id);
+        echo $variation->get_price_html();
+    }
+    wp_die();
+}
+
+//filter by products
+add_action('wp_ajax_filter_products', 'filter_products');
+add_action('wp_ajax_nopriv_filter_products', 'filter_products');
+
+function filter_products() {
+    ob_start();
+
+    $category = isset($_POST['category']) ? sanitize_text_field($_POST['category']) : '';
+
+    $args = array(
+        'post_type'      => 'product',
+        'posts_per_page' => 30,
+        'order'          => 'DESC',
+    );
+
+
+    if (!empty($category)) {
+        $args['tax_query'][] = array(
+            'taxonomy' => 'product_cat',
+            'field'    => 'slug',
+            'terms'    => $category,
+        );
+    }
+
+
+    $query = new WP_Query($args);
+
+    if ($query->have_posts()) :
+        while ($query->have_posts()) : $query->the_post();
+            global $product;
+            $product_type_class = 'fit-product-' . sanitize_html_class($product->get_type());
+            ?>
+           <li class="fit-product-main <?php echo esc_attr($product_type_class); ?>">
+                            <a href="<?php the_permalink(); ?>">
+                                <div class="fit-pro-outer">
+                                    <?php the_post_thumbnail('medium'); ?>
+                                </div>
+                            </a>
+                            <div class="fit-details-inner">
+                                <h2 class="fit-product-title"><?php the_title(); ?></h2>
+                                <div class="star-rating-section"> <!-- New div to wrap star rating and review count -->
+                                    <?php 
+                                    $average = $product->get_average_rating();
+                                    $review_count = $product->get_review_count();
+
+                                    if ($average) : ?>
+                                        <div class="star-rating" title="<?php echo sprintf(__( 'Rated %s out of 5', 'woocommerce' ), $average); ?>">
+                                            <span style="width:<?php echo ( ( $average / 5 ) * 100 ) . '%'; ?>">
+                                                <strong itemprop="ratingValue" class="rating"><?php echo $average; ?></strong> <?php echo __( 'out of 5', 'woocommerce' ); ?>
+                                            </span>
+                                        </div>
+                                        <p><?php echo $review_count; ?> review<?php echo ($review_count > 1) ? 's' : ''; ?></p>
+                                    <?php else: ?>
+                                        <div class="star-rating" title="<?php echo __( 'No reviews yet', 'woocommerce' ); ?>">
+                                            <span style="width: 0%;">
+                                                <strong itemprop="ratingValue" class="rating">0</strong> <?php echo __( 'out of 5', 'woocommerce' ); ?>
+                                            </span>
+                                        </div>
+                                        <p>No reviews</p>
+                                    <?php endif; ?>
+                                </div> <!-- End of star-rating-section -->
+                                <?php
+                                if ($product->is_type('variable')) {
+                                    $variations = $product->get_available_variations();
+                                    // Check if there are variations
+                                    if (!empty($variations)) {
+                                        echo '<form class="cart fit-cart" method="post" enctype="multipart/form-data">';
+                                        echo '<label for="variation-dropdown-' . $product->get_id() . '"> Choose a Size:</label>';
+                                        echo '<select name="variation_id" id="' . $product->get_id() . '" class="variation-dropdown">';
+                                        foreach ($variations as $variation) {
+                                            $term_name = $variation['attributes']['attribute_pa_size'] ?? '';
+                                            $term = get_term_by('slug', $term_name, 'pa_size');
+                                            $size_label = $term ? $term->name : '';
+                                            echo '<option value="' . $variation['variation_id'] . '">' . $size_label . '</option>';
+                                        }
+                                        echo '</select>';
+                                        echo '</form>';
+                                    } else {
+                                        echo '<p class="no-vari">No variations available for this product.</p>';
+                                    }
+                                }
+                                ?>
+                                <span class="price">
+                                    <?php
+
+                                    if ($product->is_type('variable')) {
+                                        $variation_ids = $product->get_children(); // Get variation IDs
+                                        $prices = array();
+
+                                        foreach ($variation_ids as $variation_id) {
+                                            $variation = wc_get_product($variation_id);
+                                            $variation_regular_price = $variation->get_regular_price();
+                                            $variation_sale_price = $variation->get_price();
+
+                                            if ($variation_sale_price) {
+                                                $prices[] = $variation_sale_price;
+                                            } elseif ($variation_regular_price) {
+                                                $prices[] = $variation_regular_price;
+                                            }
+                                        }
+
+                                        if (!empty($prices)) {
+                                            $min_price = min($prices);
+                                            $max_price = max($prices);
+
+                                            if ($min_price === $max_price) {
+                                                echo '<b>' . wc_price($min_price) . '</b>';
+                                            } else {
+                                                echo '<b>' . wc_price($min_price) .  '</b>';
+                                            }
+                                        }
+                                    } else if ($product->is_type('simple')) {
+                                        if ($sale_price === $regular_price) {
+                                            echo '<b>' . $regular_price . '</b>';
+                                        } else {
+                                            echo '<del class="fit-currency" >' . wc_price($regular_price) . '</del> ' . wc_price($sale_price);
+                                        }
+                                    } elseif ($regular_price) {
+                                        echo '<b>' . wc_price($regular_price) . '</b>';
+                                    } elseif ($sale_price) {
+                                        echo '<b>' . wc_price($sale_price) . '</b>';
+                                    }
+
+                                    ?>
+
+                                </span>
+                            </div>
+
+                            <?php
+                            $pid = $product->get_id();
+                            ?>
+                <a href="#" class="fit-add-to-cart-ctm" data-productid="<?php echo $pid ?>">Add to cart</a>
+            </li>
+            <?php
+        endwhile;
+        wp_reset_postdata();
+    else :
+        echo 'No featured products found';
+    endif;
+
+    $output = ob_get_clean();
+    echo $output;
+
+    wp_die();
+}
