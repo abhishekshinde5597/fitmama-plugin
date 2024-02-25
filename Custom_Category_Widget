@@ -146,9 +146,11 @@ class Custom_Category_Widget extends \Elementor\Widget_Base {
             'posts_per_page' => $settings['post_per_page'],
             'order' => 'ASC',
             'orderby' => 'title',
+            'paged' => 1,
             // Default order ASC
         ];
-
+        $paged = isset($_POST['paged']) ? intval($_POST['paged']) : 1;
+        
        
         if ($settings['Orderby'] === 'Date') {
             $args['orderby'] = 'post_date';
@@ -319,6 +321,8 @@ class Custom_Category_Widget extends \Elementor\Widget_Base {
                                     } else {
                                         echo '<p class="no-vari">No variations available for this product.</p>';
                                     }
+
+                                    
                                 }
                                 ?>
                                 
@@ -372,17 +376,36 @@ class Custom_Category_Widget extends \Elementor\Widget_Base {
 
                                 </span>
                             </div>
-
+                           
                             <?php
                             $pid = $product->get_id();
                             ?>
                             <a href="#" class="fit-add-to-cart-ctm" data-productid="<?php echo $pid ?>">Add to cart</a>
+                             <div class="product-cart">
+                                 
+                             </div>
                         </li>
                     <?php endwhile;
+                      $total_pages = $query->max_num_pages;
+                      if ($total_pages > 1) {
+                        echo '<div class="pagination">';
+                        global $wp_query;
+                              $big = 999999999; // need an unlikely integer
+                              echo paginate_links( array(
+                              'base'    => str_replace( $big, '%#%', esc_url( get_pagenum_link( $big ) ) ),
+                             'current' => $paged,
+                         'prev_text'    => __('<'),
+                             'next_text'    => __('>'),
+                         'prev_next'   => TRUE,
+                             'total'   => $query->max_num_pages
+                              ) );
+                        echo '</div>';
+                      }
                     wp_reset_postdata();
                     ?>
                 </ul>
             </div>
+            <div class="post-per-page" data-attri="<?php echo $settings['post_per_page']; ?>"></div>
         <?php
         else :
             echo 'No featured products found';
